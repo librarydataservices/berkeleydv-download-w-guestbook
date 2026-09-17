@@ -3,6 +3,19 @@ import pandas as pd
 
 
 def format_guestbook_template(guestbook: dict) -> tuple[dict, dict]:
+    """
+    Format a guestbook template into a form specification and a response template.
+
+    parameters:
+        - guestbook: dict
+           A guestbook JSON response returned from the Dataverse API.
+
+    returns:
+        - tuple[dict, dict]
+            A tuple containing the form specification and the response template.
+    """
+    # Standard fields offered by dataverse guestbooks.
+    # These fields are always present in the guestbook response, but may not be required.
     standard_fields = [
         {
             "name": "name",
@@ -22,6 +35,7 @@ def format_guestbook_template(guestbook: dict) -> tuple[dict, dict]:
         },
     ]
 
+    # Collect any custom questions, valid responses, and if they are required.
     questions = []
     for q in sorted(guestbook.get("customQuestions", []), key=lambda x: x.get("displayOrder", 0)):
         if q.get("hidden"):
@@ -41,6 +55,7 @@ def format_guestbook_template(guestbook: dict) -> tuple[dict, dict]:
             ]
         })
 
+    # Create the form specification.
     form_spec = {
         "guestbook_id": guestbook["id"],
         "guestbook_name": guestbook["name"],
@@ -48,6 +63,7 @@ def format_guestbook_template(guestbook: dict) -> tuple[dict, dict]:
         "questions": questions,
     }
 
+    # Create a response template with empty values for standard fields and questions.
     response = {}
 
     for field in form_spec["standard_fields"]:
@@ -66,8 +82,22 @@ def format_guestbook_template(guestbook: dict) -> tuple[dict, dict]:
 
 
 def guestbook_questions_table(guestbook: dict) -> pd.DataFrame:
+    """
+    Create a pandas DataFrame containing the questions and allowed responses from a guestbook.
+
+    parameters:
+        - guestbook: dict
+            A guestbook JSON response returned from the Dataverse API.
+
+    returns:
+        - pd.DataFrame
+            A DataFrame containing the questions and allowed responses.
+
+    """
     rows = []
 
+    # For each custom questions, add a row to the DataFrame
+    # Collect information on id, required, type, allowed responses, and question text.
     for q in sorted(guestbook.get("customQuestions", []), key=lambda x: x.get("displayOrder", 0)):
         if q.get("hidden"):
             continue
@@ -91,8 +121,18 @@ def guestbook_questions_table(guestbook: dict) -> pd.DataFrame:
 
 
 def validate_response(form_spec: dict, user_response: dict):
+    """
+    Validate a user JSON response against the form specification.
+
+    parameters:
+        - form_spec: dict
+            A form specification returned from the format_guestbook_template function.
+        - user_response: dict
+            A completed JSON guestbook response to validate against the form specification.
+    """
     errors = []
 
+    # Check that each required standard field is present and not empty.
     for field in form_spec["standard_fields"]:
         if field["required"]:
             value = user_response.get(field["name"])
@@ -101,11 +141,13 @@ def validate_response(form_spec: dict, user_response: dict):
 
     answers = user_response.get("answers", [])
 
+    # Check that answers to custom questions are formatted as a list
     if form_spec["questions"]:
         if not isinstance(answers, list):
             errors.append("'answers' must be a list.")
             return errors
 
+    #Check that items in the answers list are a dictionary with an 'id' and a 'value' key
     submitted_answers = {}
     for i, answer in enumerate(answers):
         if not isinstance(answer, dict):
@@ -122,6 +164,7 @@ def validate_response(form_spec: dict, user_response: dict):
 
         submitted_answers[answer["id"]] = answer["value"]
 
+    # Check that each required custom question has an answer and that the answer is valid.
     for q in form_spec["questions"]:
         answer = submitted_answers.get(q["id"])
 
@@ -136,6 +179,7 @@ def validate_response(form_spec: dict, user_response: dict):
                     f"Expected one of: {sorted(allowed)}; got: {answer!r}"
                 )
 
+    # If there are any errors, print them. Otherwise, indicate that the response is valid.
     if errors:
         print(errors)
     else:
@@ -143,18 +187,22 @@ def validate_response(form_spec: dict, user_response: dict):
 
 
 def extract_signed_url(response_json: dict) -> str:
-    candidates = [
-        response_json.get("data", {}).get("url"),
-        response_json.get("data", {}).get("signedUrl"),
-        response_json.get("url"),
-        response_json.get("signedUrl"),
-    ]
+    """
+    Extract the signed URL from a Dataverse API response JSON.
 
-    for candidate in candidates:
-        if candidate:
-            return candidate
-
-    raise ValueError(
-        "Could not find signed URL in response JSON. "
-        "Inspect signed_url_json to determine the correct field."
-    )
+    parameters:
+        - response_json: dict
+            A JSON response returned from the Dataverse API containing a signed URL.
+    
+    returns:
+        - str
+            The signed URL extracted from the response JSON.
+    """
+    # Check if the response_json contains the expected keys and extract the signed URL.
+    try:
+        return response_json["data"]["signedUrl"]
+    except KeyError as e:
+        raise ValueError(
+            "Expected signed URL at response_json['data']['signedUrl'], "
+            f"but it was missing. Response was: {response_json}"
+        ) from e
