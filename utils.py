@@ -1,7 +1,3 @@
-import json
-import pandas as pd
-
-
 def format_guestbook_template(guestbook: dict) -> tuple[dict, dict]:
     """
     Format a guestbook template into a form specification and a response template.
@@ -81,43 +77,45 @@ def format_guestbook_template(guestbook: dict) -> tuple[dict, dict]:
     return form_spec, response
 
 
-def guestbook_questions_table(guestbook: dict) -> pd.DataFrame:
+def print_guestbook_form_spec(form_spec: dict) -> None:
     """
-    Create a pandas DataFrame containing the questions and allowed responses from a guestbook.
+    Print the standard guestbook fields and custom guestbook questions
+    from a form_spec in a readable format.
 
     parameters:
-        - guestbook: dict
-            A guestbook JSON response returned from the Dataverse API.
+        - form_spec: dict
+            A normalized guestbook form specification.
 
     returns:
-        - pd.DataFrame
-            A DataFrame containing the questions and allowed responses.
-
+        - None
     """
-    rows = []
+    print("Standard guestbook fields")
+    print("-" * 80)
 
-    # For each custom questions, add a row to the DataFrame
-    # Collect information on id, required, type, allowed responses, and question text.
-    for q in sorted(guestbook.get("customQuestions", []), key=lambda x: x.get("displayOrder", 0)):
-        if q.get("hidden"):
-            continue
+    for field in form_spec.get("standard_fields", []):
+        print(f"  field: {field['name']}")
+        print(f"  required: {field['required']}")
+        print("-" * 80)
 
-        allowed = ""
-        if q.get("type") == "options":
-            allowed = "; ".join(
-                ov["value"]
-                for ov in sorted(q.get("optionValues", []), key=lambda x: x.get("displayOrder", 0))
-            )
+    questions = form_spec.get("questions", [])
 
-        rows.append({
-            "id": q["id"],
-            "required": q.get("required", False),
-            "type": q.get("type", "text"),
-            "allowed responses": allowed,
-            "question": q["question"],
-        })
+    if not questions:
+        print("No custom guestbook questions.")
+        return
 
-    return pd.DataFrame(rows)
+    print("Custom guestbook questions")
+    print("-" * 80)
+
+    for i, q in enumerate(questions, start=1):
+        allowed = "; ".join(opt["value"] for opt in q.get("options", []))
+
+        print(f"Question {i}")
+        print(f"  id: {q['id']}")
+        print(f"  required: {q['required']}")
+        print(f"  type: {q['type']}")
+        print(f"  allowed responses: {allowed if allowed else '(free text)'}")
+        print(f"  question: {q['question']}")
+        print("-" * 80)
 
 
 def validate_response(form_spec: dict, user_response: dict):
